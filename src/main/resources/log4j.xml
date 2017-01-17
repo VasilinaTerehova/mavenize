@@ -28,7 +28,7 @@ explicitly covering such access.
         </layout>
     </appender>
     <root>
-        <level value="debug" />
+        <level value="info" />
         <appender-ref ref="CA" />
     </root>
 </log4j:configuration>

@@ -50,6 +50,7 @@ public class MainRunner {
     public static final String DEFAULT_FOLDER = "lib";
     public static final String CLIENT_FOLDER = "client";
     public static final String DESCRIPTOR_FOLDER = "src/main/descriptor";
+    public static final String DESCRIPTOR_NEW_FOLDER = "src/assembly";
     public static final String PMR_FOLDER = "pmr";
     public static final String POM_XML = "pom.xml";
     public static final String IVY_XML = "ivy.xml";
@@ -62,7 +63,7 @@ public class MainRunner {
     public static final String ASSEMBLIES_ARTIFACT_DIRECTORY = "assemblies";
     public static final String DEFAULT_SCOPE = "compile";
     public static String[] sourceFolderArrayMaven = new String[]{"src/main/java", "src/main/resources", "src/test/java", "src/test/resources"};
-    public static String[] shimsToProcess = new String[]{"hdp24", "hdp25", "cdh58", "cdh59", "mapr410", "mapr510", "emr310",/* "emr41", */"emr46"};
+    public static String[] shimsToProcess = new String[]{"hdp24", "hdp25", "cdh58", "cdh59", "mapr510", "emr46"};
     public static String sourceJavaSubfolder = sourceFolderArrayMaven[0];
     public static String resourceJavaSubfolder = sourceFolderArrayMaven[1];
     public static String testJavaSubfolder = sourceFolderArrayMaven[2];
@@ -91,13 +92,15 @@ public class MainRunner {
         MainRunner mainRunner = new MainRunner(args[0]);
         //mainRunner.fixIvy();
         //mainRunner.runForShimsInNewStructure();
-        compare("emr46", "D:\\1\\p-h-s1\\pentaho-hadoop-shims\\emr46\\dist\\", "D:\\1\\BAD-570-test-run\\pentaho-hadoop-shims\\shims\\emr46\\assemblies\\assembly\\target\\");
+        for (String shimName : shimsToProcess) {
+            compare(shimName, "D:\\1\\p-h-s1\\"+shimName+"\\dist\\", "D:\\1\\BAD-570-test-run\\pentaho-hadoop-shims\\shims\\"+shimName+"\\assemblies\\"+shimName+"-shim\\target\\");
+        }
 
         //new MainRunner(args[0]).executeCommand("ping pentaho.com");
     }
 
     private void fixIvy() {
-        Path folder = Paths.get("D:\\1\\p-h-s1\\pentaho-hadoop-shims\\");
+        Path folder = Paths.get("D:\\1\\p-h-s1\\");
         List<String> shimList = Arrays.asList(shimsToProcess);
         try (Stream<Path> paths = Files.list(folder)) {
             paths.forEach(filePath -> {
@@ -196,10 +199,12 @@ public class MainRunner {
                         try (Stream<Path> shims = Files.list(filePath)) {
 
                             shims.forEach(shimPath -> {
+                                moduleBashExecutor = new BashExecutor(shimPath);
                                 String shimName = shimPath.getFileName().toString();
                                 if (Files.isDirectory(shimPath) && shimList.contains(shimName)) {
                                     try {
-                                        runForShim3(shimPath);
+                                        //moveAssemblyToNewFolder(shimPath);
+                                        movePropertiesAfterVersion(shimPath);
                                     } catch (IOException | URISyntaxException | JDOMException | ShimCannotBeProcessed e) {
                                         e.printStackTrace();
                                     }
@@ -212,6 +217,38 @@ public class MainRunner {
                 }
             });
         }
+    }
+
+    private void moveAssemblyToNewFolder(Path shimPath) throws IOException, URISyntaxException, JDOMException, ShimCannotBeProcessed {
+        String shimName = shimPath.getFileName().toString();
+        //1. move assembly.xml from src/main/assembly/assembly.xml to src/assembly/assembly.xml ?
+        Path assembliesDirectory = Paths.get(shimPath.toString(), ASSEMBLIES_ARTIFACT_DIRECTORY);
+        Path assemblyPath = Paths.get(assembliesDirectory.toString(), shimName + "-shim");
+        Path assemblyXmlFileOldPath = Paths.get(assemblyPath.toString(), DESCRIPTOR_FOLDER, ASSEMBLY_XML);
+        Path assemblyXmlFileNewPath = Paths.get(assemblyPath.toString(), DESCRIPTOR_NEW_FOLDER, ASSEMBLY_XML);
+        Path assemblyXmlFolderOldPath = Paths.get(assemblyPath.toString(), DESCRIPTOR_FOLDER);
+        Path assemblyXmlFolderNewPath = Paths.get(assemblyPath.toString(), DESCRIPTOR_NEW_FOLDER);
+        if (!Files.exists(assemblyXmlFolderNewPath)) {
+            Files.createDirectory(assemblyXmlFolderNewPath);
+        }
+        moduleBashExecutor.gitAdd(assemblyXmlFileNewPath);
+        FileUtils.moveFile(assemblyXmlFileOldPath, assemblyXmlFileNewPath);
+        if (Files.exists(assemblyXmlFolderOldPath)) {
+            Files.delete(assemblyXmlFolderOldPath);
+        }
+        moduleBashExecutor.gitAdd(assemblyXmlFolderOldPath);
+        //2. update every assembly project like cdh58-shim
+        String assemblyPom = Paths.get(assemblyPath.toString(), POM_XML).toString();
+        Document documentFromFile = XmlUtils.getDocumentFromFile(assemblyPom);
+        Element assemblyPluginElement = new ElementWithChildValueInParentPathCondition(new String[] {"build", "plugins"}, "artifactId").find(documentFromFile.getRootElement(), XmlUtils.readElementFromStringFull(Constants.ASSEMBLY_PLUGIN));
+        assemblyPluginElement.getContent(new ElementFilter("configuration")).get(0).getContent(new ElementFilter("descriptor")).get(0).setText("${project.basedir}/" + DESCRIPTOR_NEW_FOLDER + "/" + ASSEMBLY_XML);
+        XmlUtils.outputDoc(documentFromFile, assemblyPom);
+    }
+
+    private void movePropertiesAfterVersion(Path shimPath) throws IOException, URISyntaxException, JDOMException, ShimCannotBeProcessed {
+        //get all poms - some common poms -
+        VersionGenerator.generatePropertyVersionSection(Paths.get(folder, "common"));
+
     }
 
     private void runForShim3(Path shimPath) throws IOException, URISyntaxException, JDOMException, ShimCannotBeProcessed {

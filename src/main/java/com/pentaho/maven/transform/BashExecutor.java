@@ -1,11 +1,13 @@
 package com.pentaho.maven.transform;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 
 /**
@@ -14,6 +16,7 @@ import java.util.Arrays;
 public class BashExecutor {
 
     private final Path folderExecute;
+    private static final Logger LOG = LoggerFactory.getLogger(BashExecutor.class);
 
     public BashExecutor(Path folderExecute) {
         this.folderExecute = folderExecute;
@@ -25,7 +28,7 @@ public class BashExecutor {
 
     public void gitAdd(String path) throws IOException {
         String command = "git add " + path;
-        System.out.println(command);
+        LOG.debug(command);
         executeCommand(command);
     }
 
@@ -33,11 +36,11 @@ public class BashExecutor {
         StringBuffer output = new StringBuffer();
         Process p;
         try {
-            System.out.println(command);
+            LOG.debug(command);
             String[] commands = command.split("\\s");
-            System.out.println("commands " + Arrays.toString(commands));
+            LOG.debug("commands " + Arrays.toString(commands));
             ProcessBuilder builder = new ProcessBuilder(commands);
-            System.out.println("folder " + folderExecute);
+            LOG.debug("folder " + folderExecute);
             builder.directory(new File(folderExecute.toString()));
             p = builder.start();
             //p = runtime.exec(command);
@@ -48,17 +51,17 @@ public class BashExecutor {
             String line = "";
             while ((line = reader.readLine()) != null) {
                 output.append(line + "\n");
-                System.out.println(line);
+                LOG.debug(line);
             }
 
-            System.out.println("error stream");
+            LOG.debug("error stream");
             BufferedReader errorReader =
                     new BufferedReader(new InputStreamReader(p.getErrorStream()));
 
             line = "";
             while ((line = errorReader.readLine()) != null) {
                 output.append(line + "\n");
-                System.out.println(line);
+                LOG.debug(line);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -98,7 +101,7 @@ public class BashExecutor {
 
     public void runAntResolveToFile(String tmpFile) throws IOException {
         //todo: according to operating system should be needed file and path, now run on windows
-        executeCommand("ant.bat resolve > "+ tmpFile);
+        executeCommand("ant.bat resolve > " + tmpFile);
     }
 
     public void runAntDist() throws IOException {
@@ -108,6 +111,6 @@ public class BashExecutor {
 
     public void unArchive(Path file, Path folderToExtract) throws IOException {
         //todo: make java unzipping
-        executeCommand("7z x " + file.toString() + " -o"+folderToExtract+" -y -r");
+        executeCommand("7z x " + file.toString() + " -o" + folderToExtract + " -y -r");
     }
 }
